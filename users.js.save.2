@@ -1,0 +1,317 @@
+var mongo = require("mongodb");
+var MongoClient = mongo.MongoClient;
+var crypto = require("crypto");
+var redis = require("redis").createClient();
+var async = require("async")
+
+
+var url = "mongodb://localhost:27017/cs261db" + process.env.NODE_ENV;
+
+var singleton = null;
+
+function createAccount(req, res)
+{
+	var usern = (req.query.username || req.body.username);
+	var pwd = (req.query.password || req.body.password);
+	var avtr = (req.query.avatar || req.body.avatar);
+	if(usern && pwd)
+	{
+		MongoClient.connect(url, function(err, db){
+			if(err)
+			{
+				return res.send("UNABLE TO CONNECT BEACH");
+			}
+			else
+			{
+				var collection = db.collection("users");
+				collection.findOne({username:usern}, function(err, obj) {
+					if(err) return res.send(err);
+					if(obj)
+					{
+						var outObj = {status:"fail", reason:{username:"Already Taken"}};
+						res.send(outObj);
+					}
+					else
+					{
+						var user = {username:usern, password:pwd, avatar:avtr};
+						collection.insert(user, function(err, result){
+							if (err) {
+								return res.send(err);
+							} 
+							else 
+							{
+							  
+							  var outObj = {status:"success", data:{id:result.ops[0]._id, username:usern}};
+							  return res.send(outObj);
+      				}
+							db.close();
+						});
+					}
+				});
+			}
+			
+		});
+	}
+	else
+	{
+		return res.send({status:"fail", reason:"Missing parameters"});
+	}
+}
+
+function loginUser(req,res)
+{
+  var uname = "";
+	var pwd = "";
+	if(req.query.username)
+	{	
+		uname = req.query.username;
+	}
+	if(req.query.password)
+	{
+		pwd = req.query.password;
+	}
+	
+	if(req.body)
+	{
+		if(req.body.username)
+		{
+			uname = req.body.username;
+		}
+		if(req.body.password)
+		{
+			pwd = req.body.password;
+		}
+	}
+  
+	if(uname)
+	{
+	  MongoClient.connect(url, function(err, db){
+			if(err)
+			{
+				return res.send("UNABLE TO CONNECT BEACH");
+			}
+			else
+			{
+				var collection = db.collection("users");
+				collection.findOne({username:uname}, function(err, obj) {
+					if(err) return res.send(err);
+					if(obj)
+					{//USER EXISTS
+					  if(obj.password === pwd)
+					  {
+					    crypto.randomBytes(20, function(err, sesh){
+					      var session = sesh.toString("hex");
+					      crypto.randomBytes(20, function(err, tok){
+					        var token = tok.toString("hex");
+					        redis.rpush(session, uname, token);
+					        redis.expire(session, 3600);
+	  				  	  var outObj = {status:"success", data:{id:obj._id,session:session, token:token}};
+  					  	  return res.send(outObj);
+  					  	  db.close();
+					  	  });
+					  	});
+						}
+						else
+						{
+						  var outObj = {status:"fail", reason:"Username/password mismatch"};
+					  	return res.send(outObj);
+						}
+					}
+					else
+					{ //USER DOESN'T EXIST
+						var outObj = {status:"fail", reason:"Username/password mismatch"};
+						return res.send(outObj);
+					}
+				});
+			}
+			
+		});
+	}
+}
+
+function getUser(req,res)//auth
+{
+  var myID = "";
+  myID = new mongo.ObjectID(req.params.id);
+  var sesh = req.query._session;
+  var tok = req.query._token;
+  redis.lrange(sesh, 0, -1, function(err, result){
+    if(result && tok === result[1])
+    {
+	    if(myID)
+	    {
+	      MongoClient.connect(url, function(err, db){
+	  		  if(err)
+		  	  {
+			    	return res.send("UNABLE TO CONNECT BEACH");
+			    }
+  			  else
+	  		  {
+		  		  var collection = db.collection("users");
+			  	  collection.findOne({_id:myID}, function(err, obj) {
+				  	  if(err) return res.send(err);
+				  	  if(obj)
+					    {//USER EXISTS
+  					  	var outObj = {status:"success", data:{id:obj._id,username:obj.username}};
+	  				  	return res.send(outObj);
+		  			  }
+			  		  else
+  			  		{ //USER DOESN'T EXIST
+	  			  		var outObj = {status:"fail",reason:{id:"invalid"}};
+		  			  	return res.send(outObj);
+  			  		}
+	  			  	db.close()
+  	  			});
+	  	  	}  
+	    	});
+	  	}
+  	}
+  	else
+  	{
+  	  var outObj = {status:"fail", reason:"Not authenticated"};
+  	}
+	});
+}
+
+function findUser(req,res)//auth
+{
+  var uname = (req.params.username);
+  
+	if(uname)
+	{
+	  var sesh = req.query._session;
+    var tok = req.query._token;
+    
+    redis.lrange(sesh, 0, -1, function(err, result){
+   
+      if(result !== null && tok === result[1])
+      {
+	      MongoClient.connect(url, function(err, db){
+		     	if(err)
+		  	  {
+    				return res.send("UNABLE TO CONNECT BEACH");
+	    		}
+		    	else
+			    {
+             var collection = db.collection("users");
+  	  			 collection.findOne({username:uname}, function(err, obj) {
+	  	  		 	if(err) return res.send(err);
+		  	  		if(obj)
+			  	  	{//USER EXISTS
+				  	  	var outObj = {status:"success", data:{id:obj._id,username:obj.username}};
+					  	  return res.send(outObj);
+    					}
+	    				else
+		    			{ //USER DOESN'T EXIST
+			    			var outObj = {status:"fail",reason:{id:"invalid"}};
+				    		return res.send(outObj);
+					    }
+  					  db.close()
+  	  			});
+	  		  }
+			  
+    		});
+  	  }
+  	  
+  	});
+	}
+}
+
+function updateUser(req,res)
+{
+  var changingPass = false;
+  var changingAdmin = false;
+  var oldP = "";
+  var newP = "";
+  var avatar = "";
+  var isAdmin = false;
+  if(req.query.oldPassword && req.query.newPassword)
+  {
+    changingPass = true;
+    oldP = req.query.oldPassword;
+    newP = req.query.newPassword;
+  }
+  if(req.body)
+  {
+    if(req.body.oldPassword && req.body.newPassword)
+    {
+      changingPass = true;
+      oldP = req.query.oldPassword;
+      newP = req.query.newPassword;
+    }
+  }
+  if(req.query.avatar)
+  {
+    avatar = req.query.avatar;
+  }
+  if(req.body)
+  {
+    if(req.body.avatar)
+    {
+      avatar = req.body.avatar;
+    }
+  }
+  if(req.query.isAdmin)
+  {
+    changingAdmin = true;
+    isAdmin = req.query.isAdmin;
+  }
+  if(req.body)
+  {
+    if(req.body.isAdmin)
+    {
+      changingAdmin = true;
+      isAdmin = req.body.isAdmin;
+    }
+  }
+   var myID = "";
+  myID = new mongo.ObjectID(req.params.id);
+  
+	if(myID)
+	{
+	  MongoClient.connect(url, function(err, db){
+			if(err)
+			{
+				return res.send("UNABLE TO CONNECT BEACH");
+			}
+			else
+			{
+				var collection = db.collection("users");
+				collection.findOne({_id:myID}, function(err, obj) {
+					if(err) return res.send(err);
+					if(obj)
+					{//USER EXISTS
+						
+						if(changingPass && obj.password === oldP)
+						{
+						  res.send("QEG");
+						  //update
+						}
+						else if( changingPass)
+						{
+						  var outObj= {status:"fail", reason:{oldPassword:"Forbidden"}};
+						  return res.send(outObj);
+						}
+						res.send("O");
+						return res.send(outObj);
+					}
+					else
+					{ //USER DOESN'T EXIST
+						var failObj = {status:"fail",reason:{id:"invalid"}};
+						return res.send(outObj);
+					}
+					db.close()
+				});
+			}
+			
+		});
+	}
+}
+
+module.exports.register = function(app, root) {
+    app.post(root + "create", createAccount);
+    app.get(root + "login", loginUser);
+    app.get(root + ":id/get", getUser);
+    app.get(root + "find/:username", findUser);
+    app.get(root + ":id/update", updateUser);
+}

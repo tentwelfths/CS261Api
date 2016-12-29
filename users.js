@@ -263,22 +263,34 @@ function updateUser(req,res)
 	  	  			if(obj.length === 1 && obj[0].username === result[0]) //this user is updating himself
 		  	  		{//USER EXISTS
 		  	  		
-			  	  		var successObj = {status:"Success", data:{}};
+			  	  		var successObj = {status:"success", data:{}};
 			  	  		var usr = obj[0];
 			  	  		//res.send(usr);
 				  	  	if(usr.password === oldP && newP)
 					  	  {
 					  	    usr.password = newP;
-					  	    successObj.data.password = newP;
+					  	    successObj.data.passwordChanged = true;
 						      //return res.send("QEG");
   						    //update
   	  					}
 	  	  				else if(newP)
 		  	  			{
-			  	  		  var outObj= {status:"fail", reason:{oldPassword:"Forbidden"}};
+			  	  		  var outObj= {status:"fail", reason:{oldPassword:"Forbidden", id:"Forbidden"}};
 				  	  	  return res.send(outObj);
 					  	  }
-					  	  
+					  	  if(isAdmin)
+					  	  {
+					  	    if(usr.isAdmin)
+					  	    {
+					  	      usr.isAdmin = isAdmin;
+			              successObj.data.isAdmin = isAdmin;
+					  	    }
+					  	    else
+					  	    {
+					  	      var outObj = {status:"fail", reason:{isAdmin:"Forbidden"}};
+					  	      return res.send(outObj);
+					  	    }
+					  	  }
 					  	  if(avatar)
 					  	  {
   					  	  successObj.data.avatar = avatar;
@@ -294,7 +306,7 @@ function updateUser(req,res)
   		  			    
   		  			  	var adm;
   		  			  	var usr;
-  		  			  	if(temp == obj[0]._id)
+  		  			  	if(temp == obj[0]._id || myID == obj[0]._id)
   		  			  	{
   		  			  	  usr = obj[0];
   		  			  	  adm = obj[1];
@@ -313,7 +325,7 @@ function updateUser(req,res)
   		  			      if(newP)
   		  			      {
   		  			        usr.password = newP;
-  		  			        successObj.data.password=newP;
+  		  			        successObj.data.passwordChanged = true;
   		  			      }
   		  			      if(isAdmin == "false" || isAdmin == "true")
   		  			      {
@@ -340,7 +352,7 @@ function updateUser(req,res)
   		  			}
 	  		  		else
 		  		  	{ //USER DOESN'T EXIST
-			  		  	var failObj = {status:"fail",reason:{id:"invalid"}};
+			  		  	var failObj = {status:"fail5",reason:{id:"invalid"}};
   			  			return res.send(outObj);
 	  			  	}
 		  			  db.close()

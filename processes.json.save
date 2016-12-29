@@ -1,0 +1,26 @@
+// processes.json
+{
+    "apps": [ {
+        "name"          : "index", 
+        "script"        : "index.js",
+        "args"          : [],
+        "watch"         : true,
+        "node_args"     : [],
+        "out_file"      : "cs261api-stdout.log",
+        "error_file"    : "cs261api-stderr.log",
+        "cwd"           : "/var/node/cs261api",
+        "env"           : {
+                "SOME_VARIABLE": "foo"
+            },
+        "env_production": {
+                "NODE_ENV": "production",
+                "PORT": 7000
+            },
+        "env_dev"       : {
+                "NODE_ENV": "dev",
+                "PORT": 8888
+            }
+        }
+    ]
+}
+

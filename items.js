@@ -14,8 +14,9 @@ function createItem(req,res)
   //return res.send("HERE");
   var sesh = (req.body._session||req.query._session);
   var tok  = (req.body._token  ||req.query._token);
-  
+  //return res.send("NO TIMEOUT PLEASE");
   redis.lrange(sesh, 0, -1, function(err, results){
+    if(err)return res.send(err);
     if(results.length > 0 && tok === results[1])
     {
       var shortname = (req.query.shortname || req.body.shortname);
@@ -52,7 +53,7 @@ function createItem(req,res)
 function getItem(req,res)
 {
   var id = new mongo.ObjectID(req.params.id);
- 
+// return res.send("NO TIMEOUT PLEASE");
   MongoClient.connect(url, function(err, db){
     if(err) return res.send(err);
     var collection = db.collection("items");
@@ -60,8 +61,16 @@ function getItem(req,res)
       if(err) return res.send(err);
       if(item)
       {
-        var outObj = {status:"success", data:{id:id, shortname:item.shortname,name:item.name,description:item.description, isStackable:item.isStackable,
-                      attributes:item.attributes}};
+        var outObj = {status:"success", data:{id:id, shortname:item.shortname, isStackable:false, description:"", attributes:{}, name:item.shortname}};
+                   
+        if(item.isStackable)
+          outObj.data.isStackable = item.isStackable;
+        if(item.description)
+          outObj.data.description = item.description;
+        if(item.attributes)
+          outObj.data.attributes = item.attributes;
+        if(item.name)
+          outObj.data.name = item.name;
         return res.send(outObj); 
       }
       else
@@ -76,16 +85,55 @@ function getItem(req,res)
 function findItem(req,res)
 {
   var query = qs.parse(urllibrary.parse(req.url).query);
-  
+  //return res.send("NO TIMEOUT PLEASE");
   MongoClient.connect(url, function(err, db){
     if(err) return res.send(err);
     var collection = db.collection("items");
     //return res.send(query.items);
-    collection.find( {$or: query.items}).toArray( function(err, item){
+    collection.find( {shortname: {$in:query.shortnames}}).toArray( function(err, item){
       if(err) return res.send(err);
       if(item)
       {
-        var outObj = {status:"success", data:{item}};
+        var itemArray = new Array();
+        for( var i = 0; i < query.shortnames.length; ++i)
+        {
+          itemArray[i] = {};
+          for(var j = 0; j < item.length; ++j)
+          {
+            if(item[j].shortname === query.shortnames[i])
+            {
+              itemArray[i].id = item[j]._id;
+              itemArray[i].shortname = item[j].shortname;
+              if(item[j].name)
+              {
+                itemArray[i].name = item[j].name;
+              }
+              else
+              {
+                itemArray[i].name = item[j].shortname;
+              }
+              if(item[j].description)
+              {
+                itemArray[i].description = item[j].description;
+              }
+              else
+              {
+                itemArray[i].description = "";
+              }
+              itemArray[i].isStackable = false;
+              if(item[j].isStackable)
+              {
+                itemArray[i].isStackable = item[j].isStackable;
+              }
+              itemArray[i].attributes = {};
+              if(item[j].attributes)
+              {
+                itemArray[i].attributes = item[j].attributes;
+              }
+            }
+          }
+        }
+        var outObj = {status:"success", data:{items:itemArray}};
         return res.send(outObj); 
       }
       else
@@ -98,6 +146,7 @@ function findItem(req,res)
 
 function listItems(req,res)
 {
+//return res.send("NO TIMEOUT PLEASE");
   MongoClient.connect(url, function(err, db){
     if(err) return res.send(err);
     var collection = db.collection("items");
@@ -107,7 +156,28 @@ function listItems(req,res)
       if(err) return res.send(err);
       if(item)
       {
-        var outObj = {status:"success", data:{item}};
+        var itemArr = new Array();
+        //return res.send(item);
+        for(var i = 0; i < item.length; ++i)
+        {
+          itemArr[i] = {};
+          itemArr[i].id = item[i]._id;
+          itemArr[i].shortname = item[i].shortname;
+          itemArr[i].name = item[i].shortname;
+          
+          if(item[i].name) 
+            itemArr[i].name = item[i].name;
+          
+          itemArr[i].isStackable = false;
+          
+          if(item[i].isStackable) 
+            itemArr[i].isStackable = item[i].isStackable;
+            
+          itemArr[i].attributes = {};
+          if(item[i].attributes) 
+            itemArr[i].attributes = item[i].attributes;
+        }
+        var outObj = {status:"success", data:{items:itemArr}};
         return res.send(outObj); 
       }
       else
@@ -129,9 +199,9 @@ function updateItem(req,res)
   var attributes  = (req.body.attributes  || req.query.attributes);
   
   var myID = new mongo.ObjectID(id);
-      // return res.send(JSON.stringify(id) + "\n" + JSON.stringify(myID));
+     
   redis.lrange(sesh, 0,-1, function(err, results){
-    if(tok === results[1])
+    if(results.length > 0 && tok === results[1])
     {
       
       MongoClient.connect(url, function(err, db){
@@ -160,7 +230,7 @@ function updateItem(req,res)
                 item.description = description;
                 outObj.data.description = description;
               }
-              if(isStackable === "false" || isStackable)
+              if(typeof isStackable !== "undefined" && isStackable !== undefined)
               {
                 item.isStackable = isStackable;
                 outObj.isStackable = isStackable;
@@ -172,6 +242,32 @@ function updateItem(req,res)
               }
               itemCollection.replaceOne({_id:myID}, item, function(err, re){
                 if(err) return res.send(err);
+                console.log(outObj);
+                var outObj = {status:"success", data:{id:id}};
+                if(name)
+                {
+                
+                  item.name = name;
+                 // return res.send("A");
+                  outObj.data.name = name;
+                }
+               // return res.send("A");
+                if(description)
+                {
+                  item.description = description;
+                  outObj.data.description = description;
+                }
+                if(isStackable !== undefined)
+                {
+                  item.isStackable = isStackable;
+                  outObj.data.isStackable = isStackable;
+                }
+                
+                if(attributes)
+                {
+                  item.attributes = attributes;
+                  outObj.data.attributes = attributes;
+                }
                 return res.send(outObj);
               });
             });
@@ -182,6 +278,10 @@ function updateItem(req,res)
           }
         });
       });
+    }
+    else
+    {
+      return res.send({status:"fail", reason:"Not Authorized"});
     }
   });
 }

@@ -1,0 +1,139 @@
+var mongo = require("mongodb");
+var MongoClient = mongo.MongoClient;
+var redis = require("redis").createClient();
+
+var urlLibrary = require("url");
+var qs = require("qs");
+
+var url = "http://localhost:27017/cs261db" + process.env.NODE_ENV;
+
+function createInventory(req,res)
+{
+  var sesh = (req.body._session || req.query._session);
+  var tok  = (req.body._token   || req.query._token);
+  var tempuserID = req.params.userid;
+  var userID = new mongo.ObjectID(tempuserID);
+  var query = qs.parse(urlLibrary.parse(req.query).query);
+  var items = (req.body.items || query.items);
+  redis.lrange(sesh, 0, -1, function(err, results){
+    if(err)return res.send(res);
+    MongoClient.connect(url, function(err, db){
+      if(err)return res.send(err);
+      db.collection("users").findOne({username:results[0], function(err, adm){
+        if(err) return res.send(err);
+        for(var i = 0; i < items.length; ++i)
+          if(!items[i].shortname && !items[i].itemid) return res.send({status:"fail", reason:{items[i]:"No ID"});
+        
+        db.collection("items").find($or: {items}).toArray( function(err, itemArray){
+          var toInsert=new Array();
+          for(var i = 0; i < itemArray.length; ++i)
+          {
+            toInsert[i] = {};
+            toInsert[i].shortname = itemArray[i].shortname;
+            toInsert[i].itemid = itemArray[i].itemid;
+            toInsert[i].userid = itemArray[i].userid;
+            toInsert[i].isStackable = itemArray[i].isStackable;
+            //and I'm lost
+          }
+        });
+      });
+    });
+  });
+  
+  
+  
+  
+}
+
+function updateInventory(req,res)
+{
+  var sesh = (req.body._session || req.query._session);
+  var tok  = (req.body._token   || req.query._token);
+  var quantity = 0;
+  quantity = (req.body.quantity || req.query.quantity);
+  var id = req.params.id;
+  var myID = new mongo.ObjectID(id);
+  redis.lrange(sesh, 0, -1, function(err, results){
+    if(tok === results[1])
+    {
+      
+      MongoClient.connect(url, function(err, db){
+        if(err)return res.send(err);
+        var userCollection = db.collections("users");
+        usersCollection.findOne({username:results[0]}, function(err, adm){
+          if(err)return res.send(err);
+          if(!adm.isAdmin) return res.send({status:"fail", reason:{id:"Forbidden"}});
+          var collection = db.collections("usersInventory");
+          collection.findOne({_id:myID}, function(err, inv){
+            if(err)return res.send(err);
+            if(inv)
+            {
+              if(inv.isStackable)
+              {
+                if(quantity >= 0)
+                {
+                  inv.quanity = quantity;
+                }
+                else
+                {
+                  return res.send({status:"fail", reason:{quantity:"Invalid"}});
+                }
+              }
+              else
+              {
+                if(quantity >=0 && quantity <= 1)
+                {
+                  inv.quantity = quantity;
+                } 
+                else
+                {
+                  return res.send({status:"fail", reason:{quantity:"Invalid"}});
+                }
+              }
+              collection.replaceOne({_id:myID}, inv, function(err, result){
+                if(err)return res.send(err);
+                return res.send({id:myID, data:{quantity:quantity}});
+              });
+            }
+            else
+            {
+              return res.send({status:"fail", reason:{id:"invalid"}});
+            }
+      
+          });
+        });
+      });
+    }
+    else
+    {
+      return res.send("NOT AUTHD");  
+    }
+  });
+}
+
+function listInventory(req,res)
+{
+  var sesh = req.query._session;
+  var tok = req.query._token;
+  var id = req.params.userid;
+  var userid = new mongo.ObjectID(id);
+  redis.lrange(sesh, 0, -1, function(err, results)
+  {
+    if(tok != results[1]) return res.send("No authenticated");
+    MongoClient.connect(url, function(err, db){
+      db.collections("users").findOne({_id:userid}, function(err, usr){
+        if(err)return res.send(err);
+        if(usr.username == results[0] || usr.isAdmin)
+        {
+          
+        }
+      });    
+    });
+  });
+}
+
+module.exports.register=function(app, root){
+  app.post(root + ":userid/inventory/create", createInventory);
+  app.post(root + "inventory/:id",            updateInventory);
+  app.get(root  + ":userid/inventory/list",   listInventory);
+}

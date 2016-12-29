@@ -1,0 +1,194 @@
+var mongo = require("mongodb");
+var MongoClient = mongo.MongoClient;
+
+var url = "mongodb://localhost:27017/cs261db" + process.env.NODE_ENV;
+
+var singleton = null;
+
+function createAccount(req, res)
+{
+	var usern = "";
+	var pwd = "";
+	var avtr = "";
+	if(req.query.username)
+	{	
+		usern = req.query.username;
+	}
+	if(req.query.password)
+	{
+		pwd = req.query.password;
+	}
+	if(req.query.avatar)
+	{
+		avtr = req.query.avatar;
+	}
+	if(req.body)
+	{
+		if(req.body.username)
+		{
+			usern = req.body.username;
+		}
+		if(req.body.password)
+		{
+			pwd = req.body.password;
+		}
+		if(req.body.avatar)
+		{
+			avtr = req.body.avatar;
+		}
+	}
+	if(usern && pwd)
+	{
+		MongoClient.connect(url, function(err, db){
+			if(err)
+			{
+				return res.send("UNABLE TO CONNECT BEACH");
+			}
+			else
+			{
+				var collection = db.collection("users");
+				collection.findOne({username:usern}, function(err, obj) {
+					if(err) return res.send(err);
+					if(obj)
+					{
+						var outObj = {status:"fail", reason:{username:"Already Taken"}};
+						res.send(outObj);
+					}
+					else
+					{
+						var user = {username:usern, password:pwd, avatar:avtr};
+						collection.insert(user, function(err, result){
+							if (err) {
+								return res.send(err);
+							} 
+							else 
+							{
+							  var outObj = {status:"success", data:{id:result.ops[0]._id, username:usern}};
+							  return res.send(outObj);
+      				}
+							db.close();
+						});
+					}
+				});
+			}
+			
+		});
+	}
+	else
+	{
+		return res.send({status:"fail", reason:"Missing parameters"});
+	}
+}
+
+function loginUser(req,res)
+{
+
+}
+
+
+function getUser(req,res)
+{
+  var myID = "";
+  myID = new mongo.ObjectID(req.params.id);
+  
+	if(myID)
+	{
+	  MongoClient.connect(url, function(err, db){
+			if(err)
+			{
+				return res.send("UNABLE TO CONNECT BEACH");
+			}
+			else
+			{
+				var collection = db.collection("users");
+				collection.findOne({_id:myID}, function(err, obj) {
+					if(err) return res.send(err);
+					if(obj)
+					{//USER EXISTS
+						var outObj = {status:"success", data:{id:obj._id,username:obj.username}};
+						return res.send(obj);
+					}
+					else
+					{ //USER DOESN'T EXIST
+						var outObj = {status:"fail",reason:{id:"invalid"}};
+						return res.send(outObj);
+					}
+					db.close()
+				});
+			}
+			
+		});
+	}
+}
+
+function findUser(req,res)
+{
+  var uname = (req.params.username);
+  
+	if(uname)
+	{
+	  MongoClient.connect(url, function(err, db){
+			if(err)
+			{
+				return res.send("UNABLE TO CONNECT BEACH");
+			}
+			else
+			{
+				var collection = db.collection("users");
+				collection.findOne({username:uname}, function(err, obj) {
+					if(err) return res.send(err);
+					if(obj)
+					{//USER EXISTS
+						var outObj = {status:"success", data:{id:obj._id,username:obj.username}};
+						return res.send(obj);
+					}
+					else
+					{ //USER DOESN'T EXIST
+						var outObj = {status:"fail",reason:{id:"invalid"}};
+						return res.send(outObj);
+					}
+					db.close()
+				});
+			}
+			
+		});
+	}var myID = "";
+  myID = new mongo.ObjectID(req.params.id);
+  
+	if(myID)
+	{
+	  MongoClient.connect(url, function(err, db){
+			if(err)
+			{
+				return res.send("UNABLE TO CONNECT BEACH");
+			}
+			else
+			{
+				var collection = db.collection("users");
+				collection.findOne({_id:myID}, function(err, obj) {
+					if(err) return res.send(err);
+					if(obj)
+					{//USER EXISTS
+						var outObj = {status:"success", data:{id:obj._id,username:obj.username}};
+						return res.send(obj);
+					}
+					else
+					{ //USER DOESN'T EXIST
+						var outObj = {status:"fail",reason:{id:"invalid"}};
+						return res.send(outObj);
+					}
+					db.close()
+				});
+			}
+			
+		});
+	}
+}
+
+
+module.exports.register = function(app, root) {
+    app.get(root + "create", createAccount);
+    app.get(root + ":id/get", getUser);
+    app.get(root + "find/:username", findUser);
+    app.get(root + "login", loginUser);
+}

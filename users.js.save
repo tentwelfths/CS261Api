@@ -1,0 +1,64 @@
+var MongoClient = require("mongodb").MongoClient;
+
+var url = "mongodb://localhost:27017/cs261db" + process.env.NODE_ENV;
+
+var singleton = null;
+
+
+
+
+function createAccount(req, res)
+{
+	//Get their input somehow?
+	var username = "";
+	var password = "";
+	var avatar = "";
+	if(req.query.username)
+	{	
+		username = req.query.username;
+	}
+	if(req.query.password)
+	{
+		password = req.query.password;
+	}
+	if(req.query.avatar)
+	{
+		avatar = req.query.avatar;
+	}
+	if(req.body)
+	{
+		if(req.body.username)
+		{
+			username = req.body.username;
+		}
+		if(req.body.password)
+		{
+			password = req.body.password;
+		}
+		if(req.body.avatar)
+		{
+			avatar = req.body.avatar;
+		}
+	}
+	
+	if(singleton){
+	}
+	else
+	{
+		MongoClient.connect(url, function(err, result){
+
+			singleton = result
+			result.collection("users").ensureIndex(
+		});
+		
+		
+	}
+	
+	
+	
+}
+
+
+module.exports.register = function(app, root) {
+    app.get(root + "create", createAccount);
+}
